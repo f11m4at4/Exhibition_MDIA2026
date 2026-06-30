@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f2e6f6e3af14de5b86660a65fbe7e42, type: 3}
+  m_Name: HO_ExhibitData_RoomB_DosiuiSum
+  m_EditorClassIdentifier: 
+  exhibitId: ROOMB_02
+  exhibitName: 도시의 숨
+  artistName: 최민아
+  productionYear: "1958"
+  medium: 단채널 영상
+  roomId: ROOM_B
+  representativeKeywords:
+  - 흑백영상
+  - 고독
+  - 반복호흡
+  primaryNarration: 도시는 더 화려해졌지만, 화면 속 인물의 감정은 오히려 더 고립되어 보입니다.
+  detailedInformation: 2분 루프를 가정한 흑백 영상 작품이다. 도시의 움직임과 인물의 고독을 함께 다루며, 이후 도슨트 해설이 재생될 때 감정 밀도를 설명하는 핵심 사례로 쓰이도록 텍스트를 분리해 두었다.

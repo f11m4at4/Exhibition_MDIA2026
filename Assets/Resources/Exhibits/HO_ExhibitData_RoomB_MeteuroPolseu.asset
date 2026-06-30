@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f2e6f6e3af14de5b86660a65fbe7e42, type: 3}
+  m_Name: HO_ExhibitData_RoomB_MeteuroPolseu
+  m_EditorClassIdentifier: 
+  exhibitId: ROOMB_03
+  exhibitName: 메트로 폴스
+  artistName: 한지후
+  productionYear: "1961"
+  medium: 앰비언트 오디오
+  roomId: ROOM_B
+  representativeKeywords:
+  - 사운드
+  - 도시소음
+  - 리듬층위
+  primaryNarration: 보이지 않는 층위의 소리도 도시를 읽는 하나의 시선이 됩니다.
+  detailedInformation: 도시 소음과 이동 리듬을 레이어링한 오디오 작품이다. Room B의 영상 작품 사이에서 공간의 밀도를 높이는 역할을 하며, 후속 단계에서 사운드 의도 설명이나 간단한 보조 텍스트를 붙이기 좋은 데이터 구조로 보관한다.

@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f2e6f6e3af14de5b86660a65fbe7e42, type: 3}
+  m_Name: HO_ExhibitData_RoomA_JeongmulgwaChang
+  m_EditorClassIdentifier: 
+  exhibitId: ROOMA_02
+  exhibitName: 정물과 창
+  artistName: 박준오
+  productionYear: "1931"
+  medium: 3D 액자 + 텍스처
+  roomId: ROOM_A
+  representativeKeywords:
+  - 실내정물
+  - 구도
+  - 개인시선
+  primaryNarration: 이 작품은 익숙한 실내 풍경을 그렸지만, 시선의 방향은 이전 시대보다 훨씬 개인적입니다.
+  detailedInformation: 정물과 창문 프레임을 함께 배치해 실내와 외부 세계의 경계를 암시하는 작품이다. Room A의 두 번째 감상 포인트로 사용하며, 이후 UI 단계에서 구도 포인트 확대나 작가 시선 설명을 붙이기 좋은 구조로 정리했다.

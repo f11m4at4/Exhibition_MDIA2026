@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f2e6f6e3af14de5b86660a65fbe7e42, type: 3}
+  m_Name: HO_ExhibitData_RoomA_SaebyeoguiGeori
+  m_EditorClassIdentifier: 
+  exhibitId: ROOMA_01
+  exhibitName: 새벽의 거리
+  artistName: 김서현
+  productionYear: "1924"
+  medium: 프레임 이미지
+  roomId: ROOM_A
+  representativeKeywords:
+  - 태동
+  - 거리풍경
+  - 근대시선
+  primaryNarration: 새로운 시대는 먼저 낯선 시선으로 시작된다.
+  detailedInformation: 1920년대 도심 풍경을 차분한 시선으로 포착한 작품으로 설정했다. Room A의 입구에서 근현대 미술의 태동을 상징하는 대표작 역할을 하며, 관람자가 시대 배경과 시선의 변화를 가장 먼저 인지하도록 돕는다.

@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f2e6f6e3af14de5b86660a65fbe7e42, type: 3}
+  m_Name: HO_ExhibitData_RoomC_SaekmyeonuiHoheup
+  m_EditorClassIdentifier: 
+  exhibitId: ROOMC_02
+  exhibitName: 색면의 호흡
+  artistName: 정하린
+  productionYear: "1978"
+  medium: 대형 프로젝션 이미지
+  roomId: ROOM_C
+  representativeKeywords:
+  - 색면
+  - 호흡
+  - 모션그래픽
+  primaryNarration: 형태가 사라질수록 감각은 더 또렷해진다.
+  detailedInformation: 추상 회화를 기반으로 한 대형 프로젝션 작품이다. 고정 이미지가 아니라 미세한 움직임이 있는 연출을 전제로 하며, 향후 작가 노트나 색면 해설을 2차 정보로 보여 주기 쉽도록 별도 심화 필드를 마련해 두었다.

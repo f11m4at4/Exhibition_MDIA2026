@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f2e6f6e3af14de5b86660a65fbe7e42, type: 3}
+  m_Name: HO_ExhibitData_Epilogue_OneuluiSiseon
+  m_EditorClassIdentifier: 
+  exhibitId: EPILOGUE_01
+  exhibitName: 오늘의 시선
+  artistName: 큐레이션 팀
+  productionYear: "2026"
+  medium: 인터랙티브 월
+  roomId: EPILOGUE_LOUNGE
+  representativeKeywords:
+  - 회고
+  - 요약
+  - 다시보기
+  primaryNarration: 방을 지나며 본 변화는 예술의 변화이면서 동시에 우리를 바라보는 시선의 변화이기도 합니다.
+  detailedInformation: 에필로그 라운지에서 관람 요약과 추천 작품 재제시를 맡는 인터랙티브 월 데이터다. 실제 상호작용은 아직 연결하지 않고, 이후 단계에서 다시 보기 목록이나 종료 메시지를 표시할 수 있도록 기본 문맥만 정리했다.
