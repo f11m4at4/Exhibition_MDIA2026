@@ -1,15 +1,21 @@
 using System.Text;
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
-/// 큐레이터 해설 단계와 표시 연출을 제어한다.
+/// 큐레이터 해설 단계와 프레젠테이션 중 이동/시각 표시를 제어한다.
 /// </summary>
 public sealed class HO_CuratorPresenter : MonoBehaviour
 {
+    private const float MinimumPresentationDistance = 0.1f;
+    private const float DestinationSampleDistance = 2f;
+
     [SerializeField] private HO_UIManager uiManager;
     [SerializeField] private HO_PlayerController playerController;
     [SerializeField] private Transform curatorVisualRoot;
     [SerializeField] private float presentationDistance = 2f;
+    [SerializeField] private float presenterStoppingDistance = 0.15f;
+    [SerializeField] private float presenterRotationSpeed = 360f;
     [SerializeField] private string primaryNarrationHint = "Press E to continue.";
     [SerializeField] private string detailedInformationHint = "Press E to close.";
     [SerializeField] private string testCycleHint = "Press Space to continue the exhibit test flow.";
@@ -18,6 +24,8 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     private HO_ExhibitData currentExhibitData;
     private HO_ExhibitData[] testExhibitCache = System.Array.Empty<HO_ExhibitData>();
     private int testExhibitIndex = -1;
+    private NavMeshAgent presenterNavMeshAgent;
+    private bool hasLoggedNavMeshWarning;
 
     private enum PresentationStage
     {
@@ -27,11 +35,11 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 필수 참조를 확인하고 시작 시 큐레이터 비주얼을 안전하게 숨긴다.
+    /// 필수 참조를 확인하고 런타임에 사용할 NavMeshAgent 참조를 캐시한다.
     /// </summary>
     private void Awake()
     {
-        SetCuratorVisualActive(false);
+        presenterNavMeshAgent = GetComponent<NavMeshAgent>();
 
         if (!ValidateRequiredReferences())
         {
@@ -40,7 +48,34 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 작품 기준 첫 번째 해설 단계를 시작하고 UI와 큐레이터 위치를 갱신한다.
+    /// 해설 진행 중에는 큐레이터 이동을 갱신하고 아닐 때는 이동을 정리한다.
+    /// </summary>
+    private void Update()
+    {
+        if (!enabled)
+        {
+            return;
+        }
+
+        if (IsPresentationActive())
+        {
+            UpdateCuratorMovement();
+            return;
+        }
+
+        StopCuratorMovement();
+    }
+
+    /// <summary>
+    /// 컴포넌트가 꺼질 때 남아 있는 에이전트 경로를 정리한다.
+    /// </summary>
+    private void OnDisable()
+    {
+        StopCuratorMovement();
+    }
+
+    /// <summary>
+    /// 작품 기본 해설 1단계를 시작하고 UI와 큐레이터 표시를 갱신한다.
     /// </summary>
     public void RequestFirstPresentation(HO_ExhibitData exhibitData)
     {
@@ -58,7 +93,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 해설의 다음 단계를 진행하거나 마지막 단계라면 종료 처리로 닫는다.
+    /// 현재 해설의 다음 단계를 진행하거나 마지막 단계면 종료 처리로 넘긴다.
     /// </summary>
     public void RequestNextPresentation()
     {
@@ -83,7 +118,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 해설을 종료하고 UI, 큐레이터 비주얼, 플레이어 잠금을 정리한다.
+    /// 현재 해설을 종료하고 UI와 플레이어 잠금을 정리한다.
     /// </summary>
     public void ClosePresentation()
     {
@@ -97,13 +132,13 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
             playerController.SetControlLocked(false);
         }
 
-        SetCuratorVisualActive(false);
+        StopCuratorMovement();
         currentExhibitData = null;
         currentStage = PresentationStage.None;
     }
 
     /// <summary>
-    /// 플레이어 입력 흐름이 해설 진행 중인지 외부에서 확인할 수 있게 한다.
+    /// 플레이어 입력 흐름에서 해설 진행 중인지 외부에서 확인할 수 있게 한다.
     /// </summary>
     public bool IsPresentationActive()
     {
@@ -111,7 +146,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 프로토타입 테스트용으로 Resources 전시 데이터를 순환하며 첫 해설을 바로 시작한다.
+    /// 프로토타입 테스트용으로 Resources 전시 데이터를 순환하며 해설을 시작한다.
     /// </summary>
     public void RequestTestNextExhibit()
     {
@@ -120,7 +155,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
             return;
         }
 
-        EnsureTestExhibitCache();
+        LoadTestExhibitCache();
 
         if (testExhibitCache.Length == 0)
         {
@@ -134,7 +169,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 첫 단계 해설 본문과 힌트를 UI에 표시하고 플레이어 제어를 잠근다.
+    /// 1차 해설 본문과 힌트를 UI에 표시하고 큐레이터 방향을 갱신한다.
     /// </summary>
     private void ShowPrimaryNarration()
     {
@@ -154,7 +189,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 심화 정보 단계 본문과 메타데이터를 UI에 표시하고 종료 힌트로 전환한다.
+    /// 상세 정보 단계 본문과 메타데이터를 UI에 표시하며 큐레이터 방향을 유지한다.
     /// </summary>
     private void ShowDetailedInformation()
     {
@@ -173,7 +208,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 데이터가 해설 가능한 상태인지 확인하고 새 대상 시작 전에 이전 상태를 정리한다.
+    /// 현재 데이터가 해설 가능한 상태인지 확인하고 새 시작 전에 이전 상태를 정리한다.
     /// </summary>
     private bool TryPreparePresentation(HO_ExhibitData exhibitData)
     {
@@ -203,32 +238,120 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 큐레이터 비주얼 위치와 회전을 플레이어 기준 2미터 전방 규칙으로 갱신한다.
+    /// 큐레이터의 현재 위치 기준으로 플레이어를 바라보게 맞춘다.
     /// </summary>
     private void UpdateCuratorVisual()
     {
-        if (curatorVisualRoot == null || playerController == null)
+        RotatePresenterTowards(playerController != null ? playerController.transform.position : transform.position);
+    }
+
+    /// <summary>
+    /// 해설 중에는 플레이어 기준 목표 지점까지 NavMeshAgent 경로를 갱신한다.
+    /// </summary>
+    private void UpdateCuratorMovement()
+    {
+        if (playerController == null || presenterNavMeshAgent == null)
         {
             return;
         }
 
-        Vector3 presentationPosition = CalculatePresentationPosition();
-        Vector3 lookTarget = playerController.transform.position;
-        Vector3 lookDirection = lookTarget - presentationPosition;
-        lookDirection.y = 0f;
-
-        curatorVisualRoot.position = presentationPosition;
-
-        if (lookDirection.sqrMagnitude > 0.001f)
+        if (!presenterNavMeshAgent.isOnNavMesh)
         {
-            curatorVisualRoot.rotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
+            LogNavMeshUnavailable("HO_CuratorPresenter cannot move because the NavMeshAgent is not placed on a NavMesh.");
+            RotatePresenterTowards(playerController.transform.position);
+            return;
         }
 
-        SetCuratorVisualActive(true);
+        Vector3 desiredTarget = CalculatePresentationPosition();
+
+        if (!TryResolveNavigationTarget(desiredTarget, out Vector3 navigationTarget))
+        {
+            RotatePresenterTowards(playerController.transform.position);
+            return;
+        }
+
+        if (ShouldRefreshDestination(navigationTarget))
+        {
+            presenterNavMeshAgent.isStopped = false;
+            presenterNavMeshAgent.SetDestination(navigationTarget);
+        }
+
+        if (!presenterNavMeshAgent.pathPending
+            && presenterNavMeshAgent.remainingDistance <= presenterStoppingDistance)
+        {
+            presenterNavMeshAgent.isStopped = true;
+        }
+
+        RotatePresenterTowards(playerController.transform.position);
     }
 
     /// <summary>
-    /// 플레이어 전방이 유효하면 앞쪽 2미터, 아니면 측면 보정 위치를 계산한다.
+    /// 플레이어 앞 목표가 실패하면 플레이어 위치 자체를 대체 목적지로 다시 샘플링한다.
+    /// </summary>
+    private bool TryResolveNavigationTarget(Vector3 desiredTarget, out Vector3 navigationTarget)
+    {
+        if (TrySampleNavigationTarget(desiredTarget, out navigationTarget))
+        {
+            return true;
+        }
+
+        if (playerController != null
+            && TrySampleNavigationTarget(playerController.transform.position, out navigationTarget))
+        {
+            Debug.LogWarning("HO_CuratorPresenter fell back to the player's position because the player-forward presentation target was off the NavMesh.", this);
+            return true;
+        }
+
+        navigationTarget = desiredTarget;
+        LogNavMeshUnavailable("HO_CuratorPresenter could not sample a NavMesh destination near the presentation target or the player position.");
+        return false;
+    }
+
+    /// <summary>
+    /// 주어진 월드 위치 근처에서 실제 경로 계산에 쓸 NavMesh 목적지를 샘플링한다.
+    /// </summary>
+    private bool TrySampleNavigationTarget(Vector3 worldPosition, out Vector3 navigationTarget)
+    {
+        if (NavMesh.SamplePosition(worldPosition, out NavMeshHit hit, DestinationSampleDistance, NavMesh.AllAreas))
+        {
+            hasLoggedNavMeshWarning = false;
+            navigationTarget = hit.position;
+            return true;
+        }
+
+        navigationTarget = worldPosition;
+        return false;
+    }
+
+    /// <summary>
+    /// 목적지가 의미 있게 바뀐 경우에만 Agent 경로를 다시 계산한다.
+    /// </summary>
+    private bool ShouldRefreshDestination(Vector3 navigationTarget)
+    {
+        if (!presenterNavMeshAgent.hasPath)
+        {
+            return true;
+        }
+
+        return (presenterNavMeshAgent.destination - navigationTarget).sqrMagnitude > 0.04f;
+    }
+
+    /// <summary>
+    /// 해설이 닫히거나 이동이 끝났을 때 Agent 경로를 정리한다.
+    /// </summary>
+    private void StopCuratorMovement()
+    {
+        if (presenterNavMeshAgent == null || !presenterNavMeshAgent.isOnNavMesh)
+        {
+            return;
+        }
+
+        presenterNavMeshAgent.isStopped = true;
+        presenterNavMeshAgent.ResetPath();
+    }
+
+    /// <summary>
+    /// 플레이어 전방이 유효하면 정면 2미터, 아니면 측면 보정 방향으로 목표 지점을 계산한다.
     /// </summary>
     private Vector3 CalculatePresentationPosition()
     {
@@ -247,7 +370,38 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 큐레이터 UI 흐름에 쓸 작품 제목 문자열을 데이터 구조 기준으로 조합한다.
+    /// Presenter 루트가 현재 위치에서 플레이어 쪽을 향하도록 수평 회전만 갱신한다.
+    /// </summary>
+    private void RotatePresenterTowards(Vector3 lookTarget)
+    {
+        Vector3 lookDirection = lookTarget - transform.position;
+        lookDirection.y = 0f;
+
+        if (lookDirection.sqrMagnitude < 0.001f)
+        {
+            return;
+        }
+
+        Quaternion targetRotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, presenterRotationSpeed * Time.deltaTime);
+    }
+
+    /// <summary>
+    /// 같은 NavMesh 경고가 매 프레임 반복되지 않도록 한 번만 출력한다.
+    /// </summary>
+    private void LogNavMeshUnavailable(string message)
+    {
+        if (hasLoggedNavMeshWarning)
+        {
+            return;
+        }
+
+        hasLoggedNavMeshWarning = true;
+        Debug.LogWarning(message, this);
+    }
+
+    /// <summary>
+    /// 큐레이터 UI 제목 문자열을 데이터 구조 기준으로 조합한다.
     /// </summary>
     private static string BuildPresentationTitle(HO_ExhibitData exhibitData)
     {
@@ -260,7 +414,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 심화 정보 단계에서 본문과 작가/연도/매체/키워드를 한 번에 읽을 수 있게 합친다.
+    /// 상세 정보 단계에서 본문과 작가/연도/매체/키워드를 한 번에 읽히게 합친다.
     /// </summary>
     private static string BuildDetailedBody(HO_ExhibitData exhibitData)
     {
@@ -286,7 +440,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 기본 힌트와 테스트 순환 힌트를 합쳐 플레이어 입력 안내를 일관되게 만든다.
+    /// 기본 힌트와 테스트 순환 힌트를 합쳐 플레이어 입력 안내를 만든다.
     /// </summary>
     private string BuildHintMessage(string primaryHint)
     {
@@ -304,7 +458,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 필수 UI/플레이어 참조가 유효한 상태에서만 공개 요청을 처리하게 한다.
+    /// 필수 UI와 플레이어 참조가 유효할 때만 해설 요청을 처리한다.
     /// </summary>
     private bool CanProcessRequest()
     {
@@ -323,7 +477,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 해설 진행에 필요한 필수 참조를 시작 시 한 번 확인한다.
+    /// 해설 진행에 필요한 필수 참조를 시작 전에 확인한다.
     /// </summary>
     private bool ValidateRequiredReferences()
     {
@@ -341,16 +495,22 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
             hasAllReferences = false;
         }
 
+        if (presenterNavMeshAgent == null)
+        {
+            Debug.LogError("HO_CuratorPresenter requires an existing NavMeshAgent on the same GameObject.", this);
+            hasAllReferences = false;
+        }
+
         if (curatorVisualRoot == null)
         {
-            Debug.LogWarning("HO_CuratorPresenter does not have a curator visual root assigned. UI flow will continue without a visual actor.", this);
+            Debug.LogWarning("HO_CuratorPresenter requires a curator visual root reference for visual alignment checks.", this);
         }
 
         return hasAllReferences;
     }
 
     /// <summary>
-    /// 최소 한 단계 이상 표시할 텍스트가 있을 때만 해설 UI를 열 수 있게 한다.
+    /// 최소 한 단계 이상 표시할 텍스트가 있을 때만 해설 UI를 연다.
     /// </summary>
     private static bool HasNarrationContent(HO_ExhibitData exhibitData)
     {
@@ -359,9 +519,9 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 테스트 순환용 전시 데이터 캐시를 한 번만 로드해 Space 디버그 흐름을 단순화한다.
+    /// 테스트 순환용 전시 데이터 캐시를 한 번만 로드한다.
     /// </summary>
-    private void EnsureTestExhibitCache()
+    private void LoadTestExhibitCache()
     {
         if (testExhibitCache.Length > 0)
         {
@@ -372,7 +532,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 플레이어 조작 잠금을 해설 시작과 단계 전환 시 일관되게 적용한다.
+    /// 플레이어 조작 잠금을 해설 시작과 단계 전환 때 동일하게 적용한다.
     /// </summary>
     private void LockPlayerControl()
     {
@@ -383,18 +543,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 큐레이터 루트가 있으면 활성 상태를 바꾸고 없으면 조용히 넘어간다.
-    /// </summary>
-    private void SetCuratorVisualActive(bool isActive)
-    {
-        if (curatorVisualRoot != null)
-        {
-            curatorVisualRoot.gameObject.SetActive(isActive);
-        }
-    }
-
-    /// <summary>
-    /// 심화 정보 본문 끝에 메타데이터 행을 줄바꿈 포함 형식으로 추가한다.
+    /// 상세 정보 본문 뒤에 메타데이터 줄을 빈 줄 간격으로 추가한다.
     /// </summary>
     private static void AppendMetadataLine(StringBuilder builder, string label, string value)
     {
@@ -415,11 +564,13 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     }
 
     /// <summary>
-    /// 인스펙터에서 거리와 힌트 문자열이 비정상 값이 되지 않도록 최소 범위를 보정한다.
+    /// 인스펙터 값이 비정상 범위로 내려가지 않도록 프로토타입 기준 최소값을 유지한다.
     /// </summary>
     private void OnValidate()
     {
-        presentationDistance = Mathf.Max(0.1f, presentationDistance);
+        presentationDistance = Mathf.Max(MinimumPresentationDistance, presentationDistance);
+        presenterStoppingDistance = Mathf.Max(0.01f, presenterStoppingDistance);
+        presenterRotationSpeed = Mathf.Max(1f, presenterRotationSpeed);
         primaryNarrationHint = primaryNarrationHint != null ? primaryNarrationHint.Trim() : string.Empty;
         detailedInformationHint = detailedInformationHint != null ? detailedInformationHint.Trim() : string.Empty;
         testCycleHint = testCycleHint != null ? testCycleHint.Trim() : string.Empty;

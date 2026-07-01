@@ -249,7 +249,8 @@ public sealed class HO_PlayerController : MonoBehaviour
             return;
         }
 
-        if (nextTarget != null && (curatorPresenterReference == null || !curatorPresenterReference.IsPresentationActive()))
+        if (TryGetExhibitInteraction(nextTarget, out _)
+            && (curatorPresenterReference == null || !curatorPresenterReference.IsPresentationActive()))
         {
             uiManagerReference.ShowPrompt("Press E to interact.");
             return;
@@ -263,14 +264,35 @@ public sealed class HO_PlayerController : MonoBehaviour
     /// </summary>
     private void RequestInteraction(Collider interactTarget)
     {
-        _ = interactTarget;
-
         if (curatorPresenterReference == null)
         {
+            Debug.LogWarning("HO_PlayerController is missing a HO_CuratorPresenter reference.", this);
             return;
         }
 
-        Debug.Log("HO_PlayerController interaction target hook is reserved for a later exhibit binding task.", this);
+        if (!TryGetExhibitInteraction(interactTarget, out HO_ExhibitInteraction exhibitInteraction))
+        {
+            Debug.Log("HO_PlayerController did not find a HO_ExhibitInteraction on the current interact target.", this);
+            return;
+        }
+
+        exhibitInteraction.TryInteract(curatorPresenterReference);
+    }
+
+    /// <summary>
+    /// Resolves the exhibit interaction component from the hit collider so child colliders can still open the exhibit.
+    /// </summary>
+    private static bool TryGetExhibitInteraction(Collider interactTarget, out HO_ExhibitInteraction exhibitInteraction)
+    {
+        exhibitInteraction = null;
+
+        if (interactTarget == null)
+        {
+            return false;
+        }
+
+        exhibitInteraction = interactTarget.GetComponentInParent<HO_ExhibitInteraction>();
+        return exhibitInteraction != null;
     }
 
     /// <summary>
