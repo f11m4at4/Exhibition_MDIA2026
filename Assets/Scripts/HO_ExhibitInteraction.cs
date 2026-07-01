@@ -14,7 +14,7 @@ public sealed class HO_ExhibitInteraction : MonoBehaviour
     public HO_ExhibitData ExhibitData => exhibitData;
 
     /// <summary>
-    /// Starts the connected exhibit presentation when a valid curator presenter and exhibit data are available.
+    /// Starts the connected exhibit presentation when a valid flow controller and exhibit data are available.
     /// </summary>
     public bool TryInteract(HO_CuratorPresenter curatorPresenter)
     {
