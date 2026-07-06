@@ -24,3 +24,6 @@
 - [x] 미검증: 조작 잠금 상태일 때 이동과 회전이 멈춘다.
 - [x] 미검증: 벽 충돌 시 관통하지 않고 멈춘다.
 - [x] 미검증: 상호작용 대상이 없을 때 `E` 입력으로 아무 패널도 열리지 않는다.
+- [x] Cinemachine third-person follow tracks the player through `CameraRoot`.
+- [x] Cinemachine collision avoidance pulls the camera forward when walls or props block the view.
+- [x] `com.unity.cinemachine` and `com.unity.splines` package dependencies are declared together for the prototype camera rig.

@@ -9,10 +9,14 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
 {
     private const float MinimumPresentationDistance = 0.1f;
     private const float DestinationSampleDistance = 2f;
+    private const float IdleToMoveDelay = 2f;
+    private static readonly int MoveTriggerHash = Animator.StringToHash("Move");
+    private static readonly int ExplainTriggerHash = Animator.StringToHash("Explain");
 
     [SerializeField] private HO_UIManager uiManager;
     [SerializeField] private HO_PlayerController playerController;
     [SerializeField] private Transform curatorVisualRoot;
+    [SerializeField] private Animator curatorAnimator;
     [SerializeField] private float presentationDistance = 2f;
     [SerializeField] private float presenterStoppingDistance = 0.15f;
     [SerializeField] private float presenterRotationSpeed = 360f;
@@ -26,6 +30,8 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     private int testExhibitIndex = -1;
     private NavMeshAgent presenterNavMeshAgent;
     private bool hasLoggedNavMeshWarning;
+    private CuratorMovementState curatorMovementState = CuratorMovementState.Idle;
+    private float idleElapsedTime;
 
     private enum PresentationStage
     {
@@ -34,12 +40,20 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
         DetailedInformation
     }
 
+    private enum CuratorMovementState
+    {
+        Idle,
+        Move,
+        Explain
+    }
+
     /// <summary>
     /// 필수 참조를 확인하고 런타임에 사용할 NavMeshAgent 참조를 캐시한다.
     /// </summary>
     private void Awake()
     {
         presenterNavMeshAgent = GetComponent<NavMeshAgent>();
+        ResolveCuratorAnimator();
 
         if (!ValidateRequiredReferences())
         {
@@ -72,6 +86,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     private void OnDisable()
     {
         StopCuratorMovement();
+        ResetMovementState();
     }
 
     /// <summary>
@@ -142,7 +157,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     /// </summary>
     public bool IsPresentationActive()
     {
-        return currentStage != PresentationStage.None;
+        return true;//currentStage != PresentationStage.None;
     }
 
     /// <summary>
@@ -252,12 +267,28 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     {
         if (playerController == null || presenterNavMeshAgent == null)
         {
+            ResetMovementState();
             return;
         }
 
         if (!presenterNavMeshAgent.isOnNavMesh)
         {
             LogNavMeshUnavailable("HO_CuratorPresenter cannot move because the NavMeshAgent is not placed on a NavMesh.");
+            RotatePresenterTowards(playerController.transform.position);
+            ResetMovementState();
+            return;
+        }
+
+        if (curatorMovementState == CuratorMovementState.Idle)
+        {
+            UpdateIdleMovementState();
+            RotatePresenterTowards(playerController.transform.position);
+            return;
+        }
+
+        if (curatorMovementState == CuratorMovementState.Explain)
+        {
+            presenterNavMeshAgent.isStopped = true;
             RotatePresenterTowards(playerController.transform.position);
             return;
         }
@@ -267,6 +298,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
         if (!TryResolveNavigationTarget(desiredTarget, out Vector3 navigationTarget))
         {
             RotatePresenterTowards(playerController.transform.position);
+            SetMovementState(CuratorMovementState.Idle);
             return;
         }
 
@@ -279,7 +311,7 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
         if (!presenterNavMeshAgent.pathPending
             && presenterNavMeshAgent.remainingDistance <= presenterStoppingDistance)
         {
-            presenterNavMeshAgent.isStopped = true;
+            SetMovementState(CuratorMovementState.Explain);
         }
 
         RotatePresenterTowards(playerController.transform.position);
@@ -343,11 +375,93 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
     {
         if (presenterNavMeshAgent == null || !presenterNavMeshAgent.isOnNavMesh)
         {
+            ResetMovementState();
             return;
         }
 
         presenterNavMeshAgent.isStopped = true;
         presenterNavMeshAgent.ResetPath();
+        ResetMovementState();
+    }
+
+    /// <summary>
+    /// 자식 오브젝트의 Animator를 우선 탐색해 큐레이터 이동 시작 트리거에 사용할 참조를 준비한다.
+    /// </summary>
+    private void ResolveCuratorAnimator()
+    {
+        if (curatorAnimator != null)
+        {
+            return;
+        }
+
+        if (curatorVisualRoot != null)
+        {
+            curatorAnimator = curatorVisualRoot.GetComponentInChildren<Animator>(true);
+        }
+
+        if (curatorAnimator == null)
+        {
+            curatorAnimator = GetComponentInChildren<Animator>(true);
+        }
+    }
+
+    /// <summary>
+    /// Idle 상태에서는 2초 동안 대기한 뒤 Move 상태로 전환해 다음 이동을 시작한다.
+    /// </summary>
+    private void UpdateIdleMovementState()
+    {
+        presenterNavMeshAgent.isStopped = true;
+        idleElapsedTime += Time.deltaTime;
+
+        if (idleElapsedTime < IdleToMoveDelay)
+        {
+            return;
+        }
+
+        SetMovementState(CuratorMovementState.Move);
+    }
+
+    /// <summary>
+    /// 큐레이터 이동 상태 전환 시 필요한 타이머, 이동 정지, 애니메이션 트리거를 함께 처리한다.
+    /// </summary>
+    private void SetMovementState(CuratorMovementState nextState)
+    {
+        if (curatorMovementState == nextState)
+        {
+            return;
+        }
+
+        curatorMovementState = nextState;
+        idleElapsedTime = 0f;
+
+        if (curatorMovementState == CuratorMovementState.Move)
+        {
+            presenterNavMeshAgent.isStopped = false;
+
+            if (curatorAnimator != null)
+            {
+                curatorAnimator.SetTrigger(MoveTriggerHash);
+            }
+
+            return;
+        }
+
+        presenterNavMeshAgent.isStopped = true;
+        presenterNavMeshAgent.ResetPath();
+
+        if (curatorMovementState == CuratorMovementState.Explain && curatorAnimator != null)
+        {
+            curatorAnimator.SetTrigger(ExplainTriggerHash);
+        }
+    }
+
+    /// <summary>
+    /// 대기 시간과 이동 상태를 기본값으로 돌려 다음 프레젠테이션 갱신을 준비한다.
+    /// </summary>
+    private void ResetMovementState()
+    {
+        curatorMovementState = CuratorMovementState.Idle;
+        idleElapsedTime = 0f;
     }
 
     /// <summary>
@@ -574,5 +688,10 @@ public sealed class HO_CuratorPresenter : MonoBehaviour
         primaryNarrationHint = primaryNarrationHint != null ? primaryNarrationHint.Trim() : string.Empty;
         detailedInformationHint = detailedInformationHint != null ? detailedInformationHint.Trim() : string.Empty;
         testCycleHint = testCycleHint != null ? testCycleHint.Trim() : string.Empty;
+
+        if (curatorAnimator == null)
+        {
+            ResolveCuratorAnimator();
+        }
     }
 }

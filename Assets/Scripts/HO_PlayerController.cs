@@ -1,13 +1,27 @@
+using Unity.Cinemachine;
 using UnityEngine;
 
 /// <summary>
-/// 플레이어 이동과 작품 상호작용 입력을 처리한다.
+/// Handles prototype player movement, camera look, and exhibit interaction input.
 /// </summary>
 public sealed class HO_PlayerController : MonoBehaviour
 {
+    private const string DefaultCinemachineCameraName = "HO_PlayerFollowCamera";
+    private const string DefaultPlayerTag = "Player";
+
     [SerializeField] private CharacterController characterController;
     [SerializeField] private Transform cameraRoot;
     [SerializeField] private Camera playerCamera;
+    [SerializeField] private bool useCinemachineCamera = true;
+    [SerializeField] private float followCameraDistance = 2.75f;
+    [SerializeField] private float followCameraRadius = 0.2f;
+    [SerializeField] private float followCameraSide = 0.5f;
+    [SerializeField] private float followCameraVerticalArmLength = 0.35f;
+    [SerializeField] private Vector3 followCameraShoulderOffset = new Vector3(0f, 0.15f, 0f);
+    [SerializeField] private Vector3 followCameraDamping = new Vector3(0.1f, 0.1f, 0.1f);
+    [SerializeField] private float followCameraDampingIntoCollision = 0.1f;
+    [SerializeField] private float followCameraDampingFromCollision = 0.5f;
+    [SerializeField] private LayerMask followCameraCollisionFilter = ~0;
     [SerializeField] private float moveSpeed = 3.5f;
     [SerializeField] private float mouseSensitivity = 2f;
     [SerializeField] private float gravity = -20f;
@@ -17,13 +31,16 @@ public sealed class HO_PlayerController : MonoBehaviour
     [SerializeField] private HO_UIManager uiManagerReference;
     [SerializeField] private HO_CuratorPresenter curatorPresenterReference;
 
+    private CinemachineBrain cinemachineBrain;
+    private CinemachineCamera followCamera;
+    private CinemachineThirdPersonFollow thirdPersonFollow;
     private float verticalLookAngle;
     private float verticalVelocity;
     private bool isControlLocked;
     private Collider currentInteractTarget;
 
     /// <summary>
-    /// 필수 컴포넌트와 기본 참조를 확인하고 누락 시 안전하게 중단한다.
+    /// Resolves required references and prepares the optional Cinemachine rig.
     /// </summary>
     private void Awake()
     {
@@ -49,6 +66,8 @@ public sealed class HO_PlayerController : MonoBehaviour
             return;
         }
 
+        EnsureCinemachineRig();
+
         if (cameraRoot != null)
         {
             verticalLookAngle = NormalizeAngle(cameraRoot.localEulerAngles.x);
@@ -56,7 +75,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 입력 감지, 시점 회전, 이동 처리, 상호작용 입력을 단계별로 실행한다.
+    /// Reads input in prototype order: detection, interaction, look, then movement.
     /// </summary>
     private void Update()
     {
@@ -80,7 +99,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 플레이어 조작 잠금 상태를 외부 시스템이 제어할 수 있게 한다.
+    /// Locks or unlocks player-controlled movement and view rotation.
     /// </summary>
     public void SetControlLocked(bool isLocked)
     {
@@ -88,7 +107,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 조작 잠금 상태를 확인할 수 있게 한다.
+    /// Returns whether gameplay input is currently locked.
     /// </summary>
     public bool IsControlLocked()
     {
@@ -96,7 +115,133 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 마우스 입력으로 플레이어 좌우 회전과 카메라 상하 회전을 분리해 처리한다.
+    /// Creates and configures a Cinemachine follow rig for third-person tracking.
+    /// </summary>
+    private void EnsureCinemachineRig()
+    {
+        if (!useCinemachineCamera)
+        {
+            return;
+        }
+
+        if (cameraRoot == null || playerCamera == null)
+        {
+            Debug.LogWarning("HO_PlayerController could not enable Cinemachine because the camera root or player camera reference is missing.", this);
+            return;
+        }
+
+        EnsurePlayerTagForCameraCollision();
+        DetachPlayerCameraFromPlayerRoot();
+        EnsureCinemachineBrain();
+        EnsureFollowCamera();
+        ConfigureFollowCamera();
+    }
+
+    /// <summary>
+    /// Ensures the player can be ignored by the third-person collision solver.
+    /// </summary>
+    private void EnsurePlayerTagForCameraCollision()
+    {
+        if (!string.Equals(gameObject.tag, "Untagged"))
+        {
+            return;
+        }
+
+        try
+        {
+            gameObject.tag = DefaultPlayerTag;
+        }
+        catch (UnityException)
+        {
+            Debug.LogWarning("HO_PlayerController could not assign the default Player tag for Cinemachine collision filtering.", this);
+        }
+    }
+
+    /// <summary>
+    /// Detaches the render camera so the Cinemachine brain can drive world-space motion.
+    /// </summary>
+    private void DetachPlayerCameraFromPlayerRoot()
+    {
+        Transform cameraTransform = playerCamera.transform;
+
+        if (cameraTransform.parent != null)
+        {
+            cameraTransform.SetParent(null, true);
+        }
+    }
+
+    /// <summary>
+    /// Adds a Cinemachine brain to the render camera if it is missing.
+    /// </summary>
+    private void EnsureCinemachineBrain()
+    {
+        if (!playerCamera.TryGetComponent(out cinemachineBrain))
+        {
+            cinemachineBrain = playerCamera.gameObject.AddComponent<CinemachineBrain>();
+        }
+    }
+
+    /// <summary>
+    /// Reuses or creates the dedicated follow camera controller object.
+    /// </summary>
+    private void EnsureFollowCamera()
+    {
+        if (followCamera != null)
+        {
+            return;
+        }
+
+        GameObject followCameraObject = GameObject.Find(DefaultCinemachineCameraName);
+
+        if (followCameraObject == null)
+        {
+            followCameraObject = new GameObject(DefaultCinemachineCameraName);
+        }
+
+        if (!followCameraObject.TryGetComponent(out followCamera))
+        {
+            followCamera = followCameraObject.AddComponent<CinemachineCamera>();
+        }
+
+        if (!followCameraObject.TryGetComponent(out thirdPersonFollow))
+        {
+            thirdPersonFollow = followCameraObject.AddComponent<CinemachineThirdPersonFollow>();
+        }
+    }
+
+    /// <summary>
+    /// Applies the current follow pivot and collision settings to Cinemachine.
+    /// </summary>
+    private void ConfigureFollowCamera()
+    {
+        LensSettings lensSettings = followCamera.Lens;
+        lensSettings.FieldOfView = playerCamera.fieldOfView;
+        lensSettings.NearClipPlane = playerCamera.nearClipPlane;
+        lensSettings.FarClipPlane = playerCamera.farClipPlane;
+
+        followCamera.Lens = lensSettings;
+        followCamera.Follow = cameraRoot;
+        followCamera.LookAt = cameraRoot;
+        followCamera.Priority = 100;
+
+        thirdPersonFollow.ShoulderOffset = followCameraShoulderOffset;
+        thirdPersonFollow.VerticalArmLength = followCameraVerticalArmLength;
+        thirdPersonFollow.CameraDistance = followCameraDistance;
+        thirdPersonFollow.CameraSide = followCameraSide;
+        thirdPersonFollow.Damping = followCameraDamping;
+
+        CinemachineThirdPersonFollow.ObstacleSettings obstacleSettings = thirdPersonFollow.AvoidObstacles;
+        obstacleSettings.Enabled = true;
+        obstacleSettings.CollisionFilter = followCameraCollisionFilter;
+        obstacleSettings.IgnoreTag = gameObject.tag;
+        obstacleSettings.CameraRadius = followCameraRadius;
+        obstacleSettings.DampingIntoCollision = followCameraDampingIntoCollision;
+        obstacleSettings.DampingFromCollision = followCameraDampingFromCollision;
+        thirdPersonFollow.AvoidObstacles = obstacleSettings;
+    }
+
+    /// <summary>
+    /// Rotates yaw on the player root and pitch on the camera pivot.
     /// </summary>
     private void HandleLookInput()
     {
@@ -116,7 +261,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 키보드 축 입력과 중력을 적용해 CharacterController 이동을 처리한다.
+    /// Moves the player with CharacterController and prototype gravity.
     /// </summary>
     private void HandleMoveInput()
     {
@@ -142,7 +287,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 조작이 잠겨도 바닥 판정이 유지되도록 중력만 별도로 적용한다.
+    /// Keeps gravity active while scripted presentation locks player control.
     /// </summary>
     private void ApplyGravityOnly()
     {
@@ -156,7 +301,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 전방 Raycast로 현재 상호작용 가능한 대상 1개만 유지한다.
+    /// Tracks the current interactable directly in front of the active camera view.
     /// </summary>
     private void DetectInteractTarget()
     {
@@ -180,7 +325,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// E 입력을 분리해 두고 이후 해설/UI Task와 연결할 호출 자리를 마련한다.
+    /// Routes the E key either to curator presentation flow or exhibit interaction.
     /// </summary>
     private void HandleInteractInput()
     {
@@ -204,7 +349,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 테스트용 Space 입력으로 작품 해설을 독립적으로 순환 호출한다.
+    /// Keeps the existing prototype debug cycle input on Space.
     /// </summary>
     private void HandleDebugCycleInput()
     {
@@ -223,7 +368,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 상호작용 대상이 바뀔 때 이전 안내 정리와 새 안내 요청 지점을 분리한다.
+    /// Swaps the tracked interact target and triggers prompt updates when it changes.
     /// </summary>
     private void UpdateInteractTarget(Collider nextTarget)
     {
@@ -238,7 +383,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// UI 매니저 연결 전까지는 대상 변경 분기 자리만 유지한다.
+    /// Shows or hides the prompt according to the current interactable state.
     /// </summary>
     private void HandleInteractTargetChanged(Collider previousTarget, Collider nextTarget)
     {
@@ -260,7 +405,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 큐레이터/데이터 Task 연결 전까지는 상호작용 요청 자리만 유지한다.
+    /// Resolves the exhibit interaction bridge and forwards the request.
     /// </summary>
     private void RequestInteraction(Collider interactTarget)
     {
@@ -280,7 +425,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// Resolves the exhibit interaction component from the hit collider so child colliders can still open the exhibit.
+    /// Resolves exhibit interaction from the collider hierarchy.
     /// </summary>
     private static bool TryGetExhibitInteraction(Collider interactTarget, out HO_ExhibitInteraction exhibitInteraction)
     {
@@ -296,10 +441,19 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 인스펙터 값이 과도하지 않도록 기본 범위를 보정한다.
+    /// Clamps serialized values so the prototype stays in a safe tuning range.
     /// </summary>
     private void OnValidate()
     {
+        followCameraDistance = Mathf.Max(0.5f, followCameraDistance);
+        followCameraRadius = Mathf.Clamp(followCameraRadius, 0f, 1f);
+        followCameraSide = Mathf.Clamp01(followCameraSide);
+        followCameraVerticalArmLength = Mathf.Max(0f, followCameraVerticalArmLength);
+        followCameraDamping.x = Mathf.Max(0f, followCameraDamping.x);
+        followCameraDamping.y = Mathf.Max(0f, followCameraDamping.y);
+        followCameraDamping.z = Mathf.Max(0f, followCameraDamping.z);
+        followCameraDampingIntoCollision = Mathf.Clamp(followCameraDampingIntoCollision, 0f, 10f);
+        followCameraDampingFromCollision = Mathf.Clamp(followCameraDampingFromCollision, 0f, 10f);
         moveSpeed = Mathf.Max(0f, moveSpeed);
         mouseSensitivity = Mathf.Max(0f, mouseSensitivity);
         gravity = Mathf.Min(gravity, 0f);
@@ -308,7 +462,7 @@ public sealed class HO_PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// Unity 각도를 상하 회전 누적에 쓰기 좋은 범위로 변환한다.
+    /// Converts Euler X rotation into a signed range for pitch accumulation.
     /// </summary>
     private static float NormalizeAngle(float angle)
     {
